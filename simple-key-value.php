@@ -3,7 +3,7 @@
 /**
  * Plugin Name: Simple Key-Value Plugin
  * Description: Stores key-value pairs and provides shortcodes for display.
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Lungdsuo Mozhui
  * Author URI: https://nerdynaga.com
  */
@@ -33,7 +33,7 @@ function kvp_create_table()
     $default_keys = [];
 
     if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
-        while (($data = fgetcsv($handle)) !== false) {
+        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
             $key = trim($data[0]);
             if (!empty($key)) {
                 $default_keys[] = $key;
@@ -79,8 +79,19 @@ function kvp_update_value(WP_REST_Request $request)
     if (empty($key) || empty($value)) {
         return new WP_Error('missing_parameters', 'Both "key" and "value" parameters are required.', array('status' => 400));
     }
-
-    if (!in_array($key, ['key1', 'key2', 'key3', 'key4', 'key5'])) {
+    $default_keys = [];
+    $plugin_dir = plugin_dir_path(__FILE__);
+    $csv_file = $plugin_dir . 'default_keys.csv';
+    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
+        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
+            $key = trim($data[0]);
+            if (!empty($key)) {
+                $default_keys[] = $key;
+            }
+        }
+        fclose($handle);
+    }
+    if (!in_array($key, $default_keys)) {
         return new WP_Error('invalid_key', 'Invalid Key provided', array('status' => 400));
     }
 
@@ -132,7 +143,19 @@ function kvp_settings_page()
 
     global $wpdb;
     $table_name = $wpdb->prefix . 'key_value_pairs';
-    $keys = ['key1', 'key2', 'key3', 'key4', 'key5'];
+    $default_keys = [];
+    $plugin_dir = plugin_dir_path(__FILE__);
+    $csv_file = $plugin_dir . 'default_keys.csv';
+    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
+        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
+            $key = trim($data[0]);
+            if (!empty($key)) {
+                $default_keys[] = $key;
+            }
+        }
+        fclose($handle);
+    }
+    $keys = $default_keys;
 
 
 ?>
