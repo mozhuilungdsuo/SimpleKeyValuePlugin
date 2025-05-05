@@ -27,10 +27,22 @@ function kvp_create_table()
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
+    $plugin_dir = plugin_dir_path(__FILE__);
+    $csv_file = $plugin_dir . 'default_keys.csv';
 
+    $default_keys = [];
+
+    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
+        while (($data = fgetcsv($handle)) !== false) {
+            $key = trim($data[0]);
+            if (!empty($key)) {
+                $default_keys[] = $key;
+            }
+        }
+        fclose($handle);
+    }
 
     $existing_keys = $wpdb->get_col("SELECT key_name FROM $table_name");
-    $default_keys = ['key1', 'key2', 'key3', 'key4', 'key5'];
     foreach ($default_keys as $key) {
         if (!in_array($key, $existing_keys)) {
             $wpdb->insert($table_name, array('key_name' => $key, 'value' => '234'));
