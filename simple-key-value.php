@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Plugin Name: Simple Key-Value Plugin
  * Description: Stores key-value pairs and provides shortcodes for display.
@@ -94,11 +93,9 @@ function kvp_update_value(WP_REST_Request $request)
         return new WP_Error('missing_parameters', 'Both "key" and "value" parameters are required.', ['status' => 400]);
     }
 
-    $exists = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE key_name = %s", $key));
-    if (!$exists) {
+    if (!in_array($key, kvp_get_default_keys())) {
         return new WP_Error('invalid_key', 'Invalid Key provided', ['status' => 400]);
     }
-
 
     $result = $wpdb->update($table_name, ['value' => $value], ['key_name' => $key]);
 
@@ -159,7 +156,7 @@ function kvp_settings_page()
         echo '<div class="notice notice-success is-dismissible"><p>Values updated successfully.</p></div>';
     }
 
-?>
+    ?>
     <div class="wrap">
         <h2>API Key</h2>
         <form method="post" action="options.php">
@@ -193,7 +190,7 @@ function kvp_settings_page()
                 <tbody>
                     <?php foreach ($keys as $key):
                         $value = $wpdb->get_var($wpdb->prepare("SELECT value FROM $table_name WHERE key_name = %s", $key));
-                    ?>
+                        ?>
                         <tr>
                             <td><?php echo esc_html($key); ?></td>
                             <td><code>[kvp key="<?php echo esc_attr($key); ?>"]</code></td>
@@ -210,7 +207,7 @@ function kvp_settings_page()
             </p>
         </form>
     </div>
-<?php
+    <?php
 }
 
 
