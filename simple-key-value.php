@@ -94,9 +94,7 @@ function kvp_update_value(WP_REST_Request $request)
         return new WP_Error('missing_parameters', 'Both "key" and "value" parameters are required.', ['status' => 400]);
     }
 
-    //     if (!in_array($key, kvp_get_default_keys())) {
-    //       return new WP_Error('invalid_key', 'Invalid Key provided', ['status' => 400]);
-    //     }
+
     $existing = $wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $table_name WHERE key_name = %s", $key));
 
     if ($existing) {
@@ -105,8 +103,7 @@ function kvp_update_value(WP_REST_Request $request)
             return new WP_Error('db_error', 'Database update failed.', ['status' => 500]);
         }
     } else {
-		return new WP_Error('db_error', 'Key doesnot exists.', ['status' => 500]);
-        
+        return new WP_Error('invalid_key', 'Invalid Key provided', ['status' => 400]);
     }
 
 
