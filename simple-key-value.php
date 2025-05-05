@@ -144,6 +144,18 @@ function kvp_settings_page()
     global $wpdb;
     $table_name = $wpdb->prefix . 'key_value_pairs';
     $keys = kvp_get_default_keys();
+
+    // Handle manual updates
+    if (isset($_POST['kvp_update_keys']) && check_admin_referer('kvp_update_keys_action', 'kvp_update_keys_nonce')) {
+        foreach ($keys as $key) {
+            if (isset($_POST[$key])) {
+                $new_value = sanitize_text_field($_POST[$key]);
+                $wpdb->update($table_name, ['value' => $new_value], ['key_name' => $key]);
+            }
+        }
+        echo '<div class="notice notice-success is-dismissible"><p>Values updated successfully.</p></div>';
+    }
+
     ?>
     <div class="wrap">
         <h2>API Key</h2>
@@ -161,31 +173,43 @@ function kvp_settings_page()
             <?php submit_button(); ?>
         </form>
 
-        <h2>Shortcodes</h2>
-        <p>Use these shortcodes to display the values on your site:</p>
-        <table class="widefat">
-            <thead>
-                <tr>
-                    <th>Key</th>
-                    <th>Shortcode</th>
-                    <th>Current Value</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php foreach ($keys as $key): 
-                    $value = $wpdb->get_var($wpdb->prepare("SELECT value FROM $table_name WHERE key_name = %s", $key));
-                    ?>
+        <hr>
+
+        <h2>Manual Key-Value Editor</h2>
+        <form method="post">
+            <?php wp_nonce_field('kvp_update_keys_action', 'kvp_update_keys_nonce'); ?>
+            <table class="widefat fixed striped">
+                <thead>
                     <tr>
-                        <td><?php echo esc_html($key); ?></td>
-                        <td><code>[kvp key="<?php echo esc_attr($key); ?>"]</code></td>
-                        <td><?php echo esc_html($value); ?></td>
+                        <th>Key</th>
+                        <th>Shortcode</th>
+                        <th>Current Value</th>
+                        <th>Update Value</th>
                     </tr>
-                <?php endforeach; ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php foreach ($keys as $key):
+                        $value = $wpdb->get_var($wpdb->prepare("SELECT value FROM $table_name WHERE key_name = %s", $key));
+                        ?>
+                        <tr>
+                            <td><?php echo esc_html($key); ?></td>
+                            <td><code>[kvp key="<?php echo esc_attr($key); ?>"]</code></td>
+                            <td><?php echo esc_html($value); ?></td>
+                            <td>
+                                <input type="text" name="<?php echo esc_attr($key); ?>" value="<?php echo esc_attr($value); ?>" class="regular-text" />
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                </tbody>
+            </table>
+            <p>
+                <input type="submit" name="kvp_update_keys" class="button-primary" value="Save Changes">
+            </p>
+        </form>
     </div>
     <?php
 }
+
 
 /**
  * Register setting for API key
