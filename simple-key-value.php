@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Plugin Name: Simple Key-Value Plugin
  * Description: Stores key-value pairs and provides shortcodes for display.
@@ -8,12 +7,36 @@
  * Author URI: https://nerdynaga.com
  */
 
+/**
+ * Get default keys from CSV
+ */
+function kvp_get_default_keys()
+{
+    $csv_file = plugin_dir_path(__FILE__) . 'default_keys.csv';
+    $keys = [];
 
+    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
+        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
+            $key = trim($data[0]);
+            if (!empty($key)) {
+                $keys[] = $key;
+            }
+        }
+        fclose($handle);
+    }
+
+    return $keys;
+}
+
+/**
+ * Create table and insert default keys
+ */
 function kvp_create_table()
 {
     global $wpdb;
     $table_name = $wpdb->prefix . 'key_value_pairs';
     $charset_collate = $wpdb->get_charset_collate();
+
     if ($wpdb->get_var("SHOW TABLES LIKE '$table_name'") == $table_name) {
         $wpdb->query("DROP TABLE IF EXISTS $table_name");
     }
@@ -27,38 +50,28 @@ function kvp_create_table()
 
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
     dbDelta($sql);
-    $plugin_dir = plugin_dir_path(__FILE__);
-    $csv_file = $plugin_dir . 'default_keys.csv';
-
-    $default_keys = [];
-
-    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
-        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
-            $key = trim($data[0]);
-            if (!empty($key)) {
-                $default_keys[] = $key;
-            }
-        }
-        fclose($handle);
-    }
 
     $existing_keys = $wpdb->get_col("SELECT key_name FROM $table_name");
+    $default_keys = kvp_get_default_keys();
+
     foreach ($default_keys as $key) {
         if (!in_array($key, $existing_keys)) {
-            $wpdb->insert($table_name, array('key_name' => $key, 'value' => '234'));
+            $wpdb->insert($table_name, ['key_name' => $key, 'value' => '234']);
         }
     }
 }
 register_activation_hook(__FILE__, 'kvp_create_table');
 
-
+/**
+ * REST API endpoint
+ */
 function kvp_rest_api_init()
 {
-    register_rest_route('kvp/v1', '/update', array(
+    register_rest_route('kvp/v1', '/update', [
         'methods' => 'POST',
         'callback' => 'kvp_update_value',
         'permission_callback' => 'kvp_api_permission_check',
-    ));
+    ]);
 }
 add_action('rest_api_init', 'kvp_rest_api_init');
 
@@ -77,50 +90,35 @@ function kvp_update_value(WP_REST_Request $request)
     $value = $request->get_param('value');
 
     if (empty($key) || empty($value)) {
-        return new WP_Error('missing_parameters', 'Both "key" and "value" parameters are required.', array('status' => 400));
-    }
-    $default_keys = [];
-    $plugin_dir = plugin_dir_path(__FILE__);
-    $csv_file = $plugin_dir . 'default_keys.csv';
-    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
-        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
-            $key = trim($data[0]);
-            if (!empty($key)) {
-                $default_keys[] = $key;
-            }
-        }
-        fclose($handle);
-    }
-    if (!in_array($key, $default_keys)) {
-        return new WP_Error('invalid_key', 'Invalid Key provided', array('status' => 400));
+        return new WP_Error('missing_parameters', 'Both "key" and "value" parameters are required.', ['status' => 400]);
     }
 
-    $result = $wpdb->update(
-        $table_name,
-        array('value' => $value),
-        array('key_name' => $key)
-    );
+    if (!in_array($key, kvp_get_default_keys())) {
+        return new WP_Error('invalid_key', 'Invalid Key provided', ['status' => 400]);
+    }
+
+    $result = $wpdb->update($table_name, ['value' => $value], ['key_name' => $key]);
 
     if ($result === false) {
-        return new WP_Error('db_error', 'Database update failed.', array('status' => 500));
+        return new WP_Error('db_error', 'Database update failed.', ['status' => 500]);
     } elseif ($result === 0) {
-        $wpdb->insert(
-            $table_name,
-            array('key_name' => $key, 'value' => $value)
-        );
-        if ($wpdb->insert_id === 0) return new WP_Error('db_error', 'Database insert failed.', array('status' => 500));
+        $wpdb->insert($table_name, ['key_name' => $key, 'value' => $value]);
+        if ($wpdb->insert_id === 0) {
+            return new WP_Error('db_error', 'Database insert failed.', ['status' => 500]);
+        }
     }
 
-    return rest_ensure_response(array('message' => 'Value updated successfully.'));
+    return rest_ensure_response(['message' => 'Value updated successfully.']);
 }
 
+/**
+ * Shortcode handler
+ */
 function kvp_shortcode($atts)
 {
     global $wpdb;
     $table_name = $wpdb->prefix . 'key_value_pairs';
-    $a = shortcode_atts(array(
-        'key' => '',
-    ), $atts);
+    $a = shortcode_atts(['key' => ''], $atts);
     $key = $a['key'];
 
     $value = $wpdb->get_var($wpdb->prepare("SELECT value FROM $table_name WHERE key_name = %s", $key));
@@ -128,12 +126,14 @@ function kvp_shortcode($atts)
 }
 add_shortcode('kvp', 'kvp_shortcode');
 
+/**
+ * Admin UI
+ */
 function kvp_admin_menu()
 {
     add_options_page('Key-Value Pairs', 'Key-Value Pairs', 'manage_options', 'kvp-settings', 'kvp_settings_page');
 }
 add_action('admin_menu', 'kvp_admin_menu');
-
 
 function kvp_settings_page()
 {
@@ -143,27 +143,15 @@ function kvp_settings_page()
 
     global $wpdb;
     $table_name = $wpdb->prefix . 'key_value_pairs';
-    $default_keys = [];
-    $plugin_dir = plugin_dir_path(__FILE__);
-    $csv_file = $plugin_dir . 'default_keys.csv';
-    if (file_exists($csv_file) && ($handle = fopen($csv_file, 'r')) !== false) {
-        while (($data = fgetcsv($handle, 1000, ",", '"', "\\")) !== false) {
-            $key = trim($data[0]);
-            if (!empty($key)) {
-                $default_keys[] = $key;
-            }
-        }
-        fclose($handle);
-    }
-    $keys = $default_keys;
-
-
-?>
+    $keys = kvp_get_default_keys();
+    ?>
     <div class="wrap">
         <h2>API Key</h2>
         <form method="post" action="options.php">
-            <?php settings_fields('kvp_api_key_group'); ?>
-            <?php do_settings_sections('kvp_api_key_group'); ?>
+            <?php
+            settings_fields('kvp_api_key_group');
+            do_settings_sections('kvp_api_key_group');
+            ?>
             <table class="form-table">
                 <tr valign="top">
                     <th scope="row">API Key:</th>
@@ -172,7 +160,6 @@ function kvp_settings_page()
             </table>
             <?php submit_button(); ?>
         </form>
-
 
         <h2>Shortcodes</h2>
         <p>Use these shortcodes to display the values on your site:</p>
@@ -185,9 +172,9 @@ function kvp_settings_page()
                 </tr>
             </thead>
             <tbody>
-                <?php foreach ($keys as $key):
+                <?php foreach ($keys as $key): 
                     $value = $wpdb->get_var($wpdb->prepare("SELECT value FROM $table_name WHERE key_name = %s", $key));
-                ?>
+                    ?>
                     <tr>
                         <td><?php echo esc_html($key); ?></td>
                         <td><code>[kvp key="<?php echo esc_attr($key); ?>"]</code></td>
@@ -196,16 +183,15 @@ function kvp_settings_page()
                 <?php endforeach; ?>
             </tbody>
         </table>
-
     </div>
-<?php
+    <?php
 }
 
-
-
+/**
+ * Register setting for API key
+ */
 function kvp_register_settings()
 {
     register_setting('kvp_api_key_group', 'kvp_api_key');
 }
 add_action('admin_init', 'kvp_register_settings');
-?>
