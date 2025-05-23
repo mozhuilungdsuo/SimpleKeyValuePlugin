@@ -1,8 +1,5 @@
 
 
-<!-- new dtata -->Here's a well-structured `README.md` file for your **Simple Key-Value Plugin** that you can include in your plugin folder:
-
----
 
 ````markdown
 # Simple Key-Value Plugin
